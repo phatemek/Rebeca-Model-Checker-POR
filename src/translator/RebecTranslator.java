@@ -28,22 +28,25 @@ public class RebecTranslator {
      * Parses the given .rebeca file and returns a fully-wired RebecInstance[].
      * Prints parse errors to stderr and returns null if compilation fails.
      */
-    public static RebecInstance[] translateFile(File modelFile,
-                                                AnnotationConfigApplicationContext ctx) {
-        RebecaModelCompiler compiler   = ctx.getBean(RebecaModelCompiler.class);
-        ExceptionContainer  exceptions = ctx.getBean(ExceptionContainer.class);
+    public static RebecInstance[] translateFile(File modelFile) {
+        try (AnnotationConfigApplicationContext ctx =
+                     new AnnotationConfigApplicationContext(CompilerConfig.class)) {
 
-        Set<CompilerExtension> extensions = EnumSet.noneOf(CompilerExtension.class);
-        Pair<RebecaModel, SymbolTable> out =
-                compiler.compileRebecaFile(modelFile, extensions, CoreVersion.CORE_2_0);
+            RebecaModelCompiler compiler   = ctx.getBean(RebecaModelCompiler.class);
+            ExceptionContainer  exceptions = ctx.getBean(ExceptionContainer.class);
 
-        if (out == null || !exceptions.exceptionsIsEmpty()) {
-            System.err.println("Parse errors in " + modelFile.getName() + ":");
-            exceptions.print(System.err);
-            return null;
+            Set<CompilerExtension> extensions = EnumSet.noneOf(CompilerExtension.class);
+            Pair<RebecaModel, SymbolTable> out =
+                    compiler.compileRebecaFile(modelFile, extensions, CoreVersion.CORE_2_0);
+
+            if (out == null || !exceptions.exceptionsIsEmpty()) {
+                System.err.println("Parse errors in " + modelFile.getName() + ":");
+                exceptions.print(System.err);
+                return null;
+            }
+
+            return translate(out.getFirst());
         }
-
-        return translate(out.getFirst());
     }
 
     public static RebecInstance[] translate(RebecaModel model) {

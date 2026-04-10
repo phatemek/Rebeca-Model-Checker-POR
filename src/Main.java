@@ -1,6 +1,4 @@
 import engine.ModelChecker;
-import org.rebecalang.compiler.CompilerConfig;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import rebec.RebecInstance;
 import translator.RebecTranslator;
 
@@ -18,18 +16,14 @@ public class Main {
             else if ("-model".equals(args[i]))      modelPath      = args[++i];
         }
 
-        try (AnnotationConfigApplicationContext ctx =
-                     new AnnotationConfigApplicationContext(CompilerConfig.class)) {
+        RebecInstance[] instances = RebecTranslator.translateFile(new File(modelPath));
+        if (instances == null) return;
 
-            RebecInstance[] instances = RebecTranslator.translateFile(new File(modelPath), ctx);
-            if (instances == null) return;
+        System.out.println("Model:          " + modelPath);
+        System.out.println("POR:            " + usePOR);
+        System.out.println("Deadlock check: " + detectDeadlock);
+        System.out.println();
 
-            System.out.println("Model:          " + modelPath);
-            System.out.println("POR:            " + usePOR);
-            System.out.println("Deadlock check: " + detectDeadlock);
-            System.out.println();
-
-            new ModelChecker(instances, usePOR, detectDeadlock).check();
-        }
+        new ModelChecker(instances, usePOR, detectDeadlock).check();
     }
 }
