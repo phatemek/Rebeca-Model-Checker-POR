@@ -3,6 +3,7 @@ package engine;
 import model.GlobalSnapshot;
 import por.SafetyAnalyzer;
 import rebec.RebecInstance;
+import rebec.StepResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,12 +24,14 @@ public class ModelChecker {
 
     private final RebecInstance[] instances;
     private final boolean         usePOR;
+    private final boolean         detectDeadlock;
     private final StateStorage    storage    = new StateStorage();
     private final List<String>    violations = new ArrayList<>();
 
-    public ModelChecker(RebecInstance[] instances, boolean usePOR) {
-        this.instances = instances;
-        this.usePOR    = usePOR;
+    public ModelChecker(RebecInstance[] instances, boolean usePOR, boolean detectDeadlock) {
+        this.instances      = instances;
+        this.usePOR         = usePOR;
+        this.detectDeadlock = detectDeadlock;
         if (usePOR) SafetyAnalyzer.analyze(instances);
     }
 
@@ -55,13 +58,16 @@ public class ModelChecker {
         List<RebecInstance> enabled = enabledRebecs();
 
         if (enabled.isEmpty()) {
-            report("DEADLOCK detected");
+            if (detectDeadlock) report("DEADLOCK detected");
         } else {
             List<RebecInstance> ample = usePOR ? computeAmpleSet(enabled, current) : enabled;
 
             for (RebecInstance r : ample) {
                 current.restore(instances);
-                r.execute(instances);
+                String action = r.enabledAction();
+                StepResult result = r.execute(instances);
+                if (result == StepResult.ASSERTION_FAILED)
+                    report("ASSERTION_FAILED: " + r.name + " failed an assertion in " + action + "()");
                 checkOverflows(r);
                 dfs(new GlobalSnapshot(instances));
             }

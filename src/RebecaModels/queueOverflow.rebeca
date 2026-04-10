@@ -1,0 +1,58 @@
+
+/*
+ * Queue Overflow Test
+ *
+ * A Dispatcher continuously sends bursts of 5 tasks to a Worker whose queue
+ * capacity is 3.  The Worker's queue already holds its own 'initial' message
+ * at startup (size = 1), so it can accept only 2 more messages before it is full.
+ *
+ * Execution trace (first dispatch cycle):
+ *   Dispatcher.initial() runs atomically:
+ *     send 1 → Worker queue: [initial, task]          (size 2)
+ *     send 2 → Worker queue: [initial, task, task]    (size 3 — full)
+ *     send 3 → OVERFLOW  (message dropped)
+ *     send 4 → OVERFLOW  (message dropped)
+ *     send 5 → OVERFLOW  (message dropped)
+ *     self.initial() → Dispatcher reschedules itself for the next cycle
+ *
+ * The Dispatcher loops forever, so the system never terminates and no
+ * spurious deadlock is reported.  Neither rebec has state variables, which
+ * keeps the state space finite.
+ *
+ * Expected result: QUEUE_OVERFLOW violation detected, no deadlock.
+ */
+
+reactiveclass Dispatcher(1)
+{
+	knownrebecs
+	{
+		Worker worker;
+	}
+	statevars { }
+
+	msgsrv initial()
+	{
+		worker.task();
+		worker.task();
+		worker.task();
+		worker.task();
+		worker.task();
+		self.initial();
+	}
+}
+
+reactiveclass Worker(3)
+{
+	knownrebecs { }
+	statevars { }
+
+	msgsrv initial() { }
+
+	msgsrv task() { }
+}
+
+main
+{
+	Dispatcher dispatcher(worker):();
+	Worker worker():();
+}

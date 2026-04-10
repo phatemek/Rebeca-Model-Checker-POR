@@ -1,0 +1,59 @@
+
+/*
+ * Assertion Violation Test
+ *
+ * A Counter runs in a continuous cycle: reset → three increments → check → repeat.
+ * The check asserts that count has not yet reached 3 — which it always has.
+ *
+ * self.initial() is enqueued from inside initial() itself, BEFORE check() runs.
+ * So even when the assertion fails and halts check() mid-execution, initial() is
+ * already waiting in the queue and the system keeps cycling.  No spurious deadlock.
+ *
+ * Queue contents after initial() executes:
+ *   [increment, increment, increment, check, initial]   (5 messages, queue size = 5)
+ *
+ * Execution trace (one cycle):
+ *   initial()     → count = 0, queues next five messages
+ *   increment()   → count = 1
+ *   increment()   → count = 2
+ *   increment()   → count = 3
+ *   check()       → assertion(count < 3)  →  3 < 3  →  FALSE  →  ASSERTION FAILED
+ *                   (initial() is already queued — system keeps running)
+ *   initial()     → count = 0, re-queues same five messages → revisited state → DFS stops
+ *
+ * Expected result: ASSERTION_FAILED violation detected, no deadlock.
+ */
+
+reactiveclass Counter(5)
+{
+	knownrebecs { }
+	statevars
+	{
+		int count;
+	}
+
+	msgsrv initial()
+	{
+		count = 0;
+		self.increment();
+		self.increment();
+		self.increment();
+		self.check();
+		self.initial();
+	}
+
+	msgsrv increment()
+	{
+		count = count + 1;
+	}
+
+	msgsrv check()
+	{
+		assertion(count < 3);
+	}
+}
+
+main
+{
+	Counter counter():();
+}

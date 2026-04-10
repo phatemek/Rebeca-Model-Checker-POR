@@ -92,7 +92,11 @@ public class RebecInstance {
         Message msg = queue.pollFirst();
         MsgsrvDeclaration msgsrv = msgsrvs.get(msg.name);
         if (msgsrv == null) return StepResult.OK;   // unknown message — skip silently
-        executeBlock(msgsrv.getBlock(), allRebecs, msg.senderId);
+        try {
+            executeBlock(msgsrv.getBlock(), allRebecs, msg.senderId);
+        } catch (AssertionFailedException e) {
+            return StepResult.ASSERTION_FAILED;
+        }
         return StepResult.OK;
     }
 
@@ -141,8 +145,15 @@ public class RebecInstance {
 
         } else if (st instanceof DotPrimary) {
             executeSend((DotPrimary) st, allRebecs, senderId);
+
+        } else if (st instanceof TermPrimary) {
+            TermPrimary term = (TermPrimary) st;
+            if ("assertion".equals(term.getName()) && term.getParentSuffixPrimary() != null) {
+                List<Expression> args = term.getParentSuffixPrimary().getArguments();
+                if (!args.isEmpty() && !toBoolean(evalExpr(args.get(0), allRebecs, senderId)))
+                    throw new AssertionFailedException();
+            }
         }
-        // Other statement types (assertions, etc.) can be added here as needed
     }
 
     private Object evalExpr(Expression e, RebecInstance[] allRebecs, int senderId) {
@@ -243,5 +254,9 @@ public class RebecInstance {
     @Override
     public String toString() {
         return name + "(id=" + id + ", action=" + enabledAction() + ")";
+    }
+
+    private static class AssertionFailedException extends RuntimeException {
+        AssertionFailedException() { super(null, null, true, false); }
     }
 }
