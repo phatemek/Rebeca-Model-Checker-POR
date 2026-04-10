@@ -49,19 +49,13 @@ Same model with POR enabled:
 java -cp "out/production/PartialOrderReduction:src/Dependencies/compiler-2.30.jar:$(find src/Dependencies -name '*.jar' | tr '\n' ':')" \
      Main -model src/RebecaModels/diningPhilosophers.rebeca -por
 ```
-
-Check the deadlocking version:
-```bash
-java -cp "out/production/PartialOrderReduction:src/Dependencies/compiler-2.30.jar:$(find src/Dependencies -name '*.jar' | tr '\n' ':')" \
-     Main -model src/RebecaModels/diningPhilosophersDeadlock.rebeca -por
-```
-
 ---
 
 ## Models
 
-| File | Description |
-|------|-------------|
-| `src/RebecaModels/diningPhilosophers.rebeca` | 3 philosophers, deadlock-free. Fork bindings use resource ordering to break the circular wait. |
-| `src/RebecaModels/diningPhilosophersDeadlock.rebeca` | 3 philosophers, deadlocks. Fully circular fork binding — each philosopher grabs their left fork first, forming a circular wait. |
-| `src/RebecaModels/queueOverflow.rebeca` | A Dispatcher sends 5 tasks to a Worker whose queue holds only 3. Triggers queue overflow detection. |
+| File | Description | Expected result |
+|------|-------------|-----------------|
+| `src/RebecaModels/diningPhilosophers.rebeca` | 3 philosophers, deadlock-free. Fork bindings use resource ordering to break the circular wait. | No violations |
+| `src/RebecaModels/diningPhilosophersDeadlock.rebeca` | 3 philosophers, deadlocks. Fully circular fork binding — each philosopher grabs their left fork first, forming a circular wait. | `DEADLOCK` |
+| `src/RebecaModels/queueOverflow.rebeca` | A Dispatcher sends 5 tasks to a Worker whose queue holds only 3. Triggers queue overflow detection. | `QUEUE_OVERFLOW` |
+| `src/RebecaModels/assertionViolation.rebeca` | A Counter cycles: reset → three increments → check. The check asserts `count < 3`, which always fails at `count == 3`. | `ASSERTION_FAILED` |
