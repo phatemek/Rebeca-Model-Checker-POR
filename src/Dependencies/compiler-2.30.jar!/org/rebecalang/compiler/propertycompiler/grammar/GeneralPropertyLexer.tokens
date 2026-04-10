@@ -1,0 +1,8 @@
+DEFINE=1
+THEN=2
+PROPERTY=3
+ASSERTION=4
+'define'=1
+'->'=2
+'property'=3
+'Assertion'=4
