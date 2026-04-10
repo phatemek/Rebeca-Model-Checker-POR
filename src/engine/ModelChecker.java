@@ -46,6 +46,8 @@ public class ModelChecker {
         return violations;
     }
 
+    public int getStatesExplored() { return storage.visitedCount(); }
+
     // -------------------------------------------------------------------------
 
     private void dfs(GlobalSnapshot current) {
