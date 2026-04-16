@@ -1,0 +1,84 @@
+abstract reactiveclass Train(10) {
+	knownrebecs {
+		SafetyBridgeController bc;
+	}
+	statevars {
+		byte id;
+	}
+	msgsrv reachBridge() {
+		boolean isReached = ?(true, false);
+		if (isReached) {
+			bc.arrive(id);
+		}
+		self.reachBridge();
+	}
+	msgsrv youMayPass() {
+		self.passed();
+	}
+	abstract msgsrv passed();
+}
+
+reactiveclass NormalTrain extends Train(3) {
+	NormalTrain(byte myId) {
+		id = myId;
+		self.reachBridge();
+	}
+	msgsrv passed() {
+		bc.leave();
+	}
+}
+
+reactiveclass HazardousCargoTrain extends Train(10) {
+	HazardousCargoTrain(byte myId) {
+		id = myId;
+		self.reachBridge();
+	}
+	msgsrv passed() {
+		self.considerSafetyDistance();
+	}
+	msgsrv considerSafetyDistance() {
+		bc.leave();
+		boolean dup = ?(true, false);
+		if (dup) {
+			bc.leave();
+		}
+	}
+}
+
+reactiveclass SafetyBridgeController(15) {
+	statevars {
+		int trainsOnTheBridge;
+		int permitsOutstanding;
+	}
+	SafetyBridgeController() {
+		trainsOnTheBridge = 0;
+		permitsOutstanding = 0;
+	}
+	msgsrv arrive(byte trainId) {
+		if (trainsOnTheBridge == 0) {
+			assertion(permitsOutstanding == 0);
+			trainsOnTheBridge = trainsOnTheBridge + 1;
+			permitsOutstanding = permitsOutstanding + 1;
+			((Train)sender).youMayPass();
+			assertion(trainsOnTheBridge <= 1);
+			assertion(permitsOutstanding <= 1);
+		}
+	}
+	msgsrv leave() {
+		assertion(trainsOnTheBridge > 0);
+		assertion(permitsOutstanding > 0);
+		trainsOnTheBridge = trainsOnTheBridge - 1;
+		permitsOutstanding = permitsOutstanding - 1;
+		assertion(trainsOnTheBridge >= 0);
+		assertion(permitsOutstanding >= 0);
+		assertion(trainsOnTheBridge == permitsOutstanding);
+	}
+}
+
+main {
+	SafetyBridgeController controller():();
+	NormalTrain train1(controller):((byte)1);
+	NormalTrain train2(controller):((byte)2);
+	HazardousCargoTrain train4(controller):((byte)4);
+	HazardousCargoTrain train5(controller):((byte)5);
+}

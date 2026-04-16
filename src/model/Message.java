@@ -9,15 +9,17 @@ import java.util.Arrays;
  */
 public final class Message {
 
-    public final String name;
-    public final int    senderId;   // ID of the rebec that sent this message
-    public final int[]  params;     // empty array when the message has no parameters
+    public final String   name;
+    public final int      senderId;  // ID of the rebec that sent this message
+    public final Object[] params;    // empty array when the message has no parameters
 
     public Message(String name, int senderId) {
-        this(name, senderId, new int[0]);
+        this.name     = name;
+        this.senderId = senderId;
+        this.params   = new Object[0];
     }
 
-    public Message(String name, int senderId, int... params) {
+    public Message(String name, int senderId, Object... params) {
         this.name     = name;
         this.senderId = senderId;
         this.params   = params.clone();

@@ -1,0 +1,70 @@
+abstract reactiveclass Train(3) {
+	knownrebecs {
+		SafetyBridgeController bc;
+	}
+	statevars {
+		byte id;
+	}
+	msgsrv reachBridge() {
+		boolean isReached = ?(true, false);
+		if (isReached) {
+			bc.arrive(id);
+		}
+		self.reachBridge();
+	}
+	msgsrv youMayPass() {
+		self.passed();
+	}
+	abstract msgsrv passed();
+}
+
+reactiveclass NormalTrain extends Train(3) {
+	NormalTrain(byte myId) {
+		id = myId;
+		self.reachBridge();
+	}
+	msgsrv passed() {
+		bc.leave();
+	}
+}
+
+reactiveclass HazardousCargoTrain extends Train(3) {
+	HazardousCargoTrain(byte myId) {
+		id = myId;
+		self.reachBridge();
+	}
+	msgsrv passed() {
+		self.considerSafetyDistance();
+	}
+	msgsrv considerSafetyDistance() {
+		bc.leave();
+	}
+}
+
+reactiveclass SafetyBridgeController(10) {
+	statevars {
+		int trainsOnTheBridge;
+	}
+	SafetyBridgeController() {
+		trainsOnTheBridge = 0;
+	}
+	msgsrv arrive(byte trainId) {
+		if (trainsOnTheBridge == 0) {
+			trainsOnTheBridge = trainsOnTheBridge + 1;
+			((Train)sender).youMayPass();
+		}
+	}
+	msgsrv leave() {
+		if (trainsOnTheBridge > 0) {
+			trainsOnTheBridge = trainsOnTheBridge - 1;
+		}
+	}
+}
+
+main {
+	SafetyBridgeController controller():();
+	NormalTrain train1(controller):((byte)1);
+	NormalTrain train2(controller):((byte)2);
+	HazardousCargoTrain train4(controller):((byte)4);
+	HazardousCargoTrain train5(controller):((byte)5);
+}

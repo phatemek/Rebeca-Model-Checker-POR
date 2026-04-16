@@ -1,0 +1,81 @@
+reactiveclass O(5) {
+	knownrebecs {
+		A a;
+		B b;
+	}
+	O() {
+		self.O1();
+	}
+	msgsrv O1() {
+		a.m1();
+		b.m2();
+	}
+}
+
+reactiveclass A(5) {
+	knownrebecs {
+		C c;
+	}
+	msgsrv m1() {
+		c.m3();
+	}
+}
+
+reactiveclass B(5) {
+	knownrebecs {
+		D d;
+	}
+	msgsrv m2() {
+		d.m4();
+	}
+}
+
+reactiveclass C(5) {
+	knownrebecs {
+		E e;
+	}
+	msgsrv m3() {
+		e.m3();
+	}
+}
+
+reactiveclass D(5) {
+	knownrebecs {
+		E e;
+	}
+	msgsrv m4() {
+		e.m4();
+	}
+}
+
+reactiveclass E(5) {
+	knownrebecs {
+		A a;
+		B b;
+	}
+	statevars {
+		int x;
+	}
+	E() {
+		x = 1;
+	}
+	msgsrv m4() {
+		x = x + 100;
+		assertion(x >= 2);
+		a.m1();
+	}
+	msgsrv m3() {
+		x = x * 2;
+		assertion(x >= 2);
+		b.m2();
+	}
+}
+
+main {
+	E e(a, b):();
+	C c(e):();
+	D d(e):();
+	A a(c):();
+	B b(d):();
+	O o(a, b):();
+}

@@ -5,6 +5,7 @@ import model.RebecSnapshot;
 import org.rebecalang.compiler.modelcompiler.corerebeca.objectmodel.*;
 
 import java.util.*;
+import java.util.Arrays;
 
 /**
  * A generic, interpreter-based rebec instance.
@@ -92,6 +93,10 @@ public class RebecInstance {
         Message msg = queue.pollFirst();
         MsgsrvDeclaration msgsrv = msgsrvs.get(msg.name);
         if (msgsrv == null) return StepResult.OK;   // unknown message — skip silently
+        // Bind formal parameters to actual values passed with the message
+        List<FormalParameterDeclaration> formals = msgsrv.getFormalParameters();
+        for (int i = 0; i < formals.size() && i < msg.params.length; i++)
+            vars.put(formals.get(i).getName(), msg.params[i]);
         try {
             executeBlock(msgsrv.getBlock(), allRebecs, msg.senderId);
         } catch (AssertionFailedException e) {
@@ -135,12 +140,56 @@ public class RebecInstance {
             else if (cs.getElseStatement() != null)
                 executeStatement(cs.getElseStatement(), allRebecs, senderId);
 
+        } else if (st instanceof FieldDeclaration) {
+            // Local variable declaration inside a msgsrv body (e.g. "int I = 0;")
+            FieldDeclaration fd = (FieldDeclaration) st;
+            for (VariableDeclarator vd : fd.getVariableDeclarators()) {
+                Object val;
+                if (fd.getType() instanceof ArrayType) {
+                    int size = ((ArrayType) fd.getType()).getDimensions().get(0);
+                    val = new int[size];
+                } else if (vd.getVariableInitializer() instanceof OrdinaryVariableInitializer) {
+                    val = evalExpr(((OrdinaryVariableInitializer) vd.getVariableInitializer()).getValue(), allRebecs, senderId);
+                } else {
+                    val = "boolean".equals(fd.getType().getTypeName()) ? Boolean.FALSE : 0;
+                }
+                vars.put(vd.getVariableName(), val);
+            }
+
+        } else if (st instanceof WhileStatement) {
+            WhileStatement ws = (WhileStatement) st;
+            while (toBoolean(evalExpr(ws.getCondition(), allRebecs, senderId)))
+                executeStatement(ws.getStatement(), allRebecs, senderId);
+
         } else if (st instanceof BinaryExpression) {
             BinaryExpression bin = (BinaryExpression) st;
             if ("=".equals(bin.getOperator())) {
-                String varName = ((TermPrimary) bin.getLeft()).getName();
-                Object value   = evalExpr(bin.getRight(), allRebecs, senderId);
-                vars.put(varName, value);
+                TermPrimary lhs = (TermPrimary) bin.getLeft();
+                Object value    = evalExpr(bin.getRight(), allRebecs, senderId);
+                if (!lhs.getIndices().isEmpty()) {
+                    int[] arr = (int[]) vars.get(lhs.getName());
+                    int idx = toInt(evalExpr(lhs.getIndices().get(0), allRebecs, senderId));
+                    arr[idx] = toInt(value);
+                } else {
+                    vars.put(lhs.getName(), value);
+                }
+            }
+
+        } else if (st instanceof UnaryExpression) {
+            // Handles increment/decrement statements: I++, I--, fifo_queue[I]--
+            UnaryExpression u = (UnaryExpression) st;
+            if ("++".equals(u.getOperator()) || "--".equals(u.getOperator())) {
+                int delta = "++".equals(u.getOperator()) ? 1 : -1;
+                if (u.getExpression() instanceof TermPrimary) {
+                    TermPrimary tp = (TermPrimary) u.getExpression();
+                    if (!tp.getIndices().isEmpty()) {
+                        int[] arr = (int[]) vars.get(tp.getName());
+                        int idx = toInt(evalExpr(tp.getIndices().get(0), allRebecs, senderId));
+                        arr[idx] += delta;
+                    } else {
+                        vars.put(tp.getName(), toInt(vars.get(tp.getName())) + delta);
+                    }
+                }
             }
 
         } else if (st instanceof DotPrimary) {
@@ -164,6 +213,11 @@ public class RebecInstance {
         if (e instanceof TermPrimary) {
             TermPrimary term = (TermPrimary) e;
             String n = term.getName();
+            if (!term.getIndices().isEmpty()) {
+                int[] arr = (int[]) vars.get(n);
+                int idx = toInt(evalExpr(term.getIndices().get(0), allRebecs, senderId));
+                return arr[idx];
+            }
             if ("sender".equals(n)) return senderId;
             if ("self".equals(n))   return this.id;
             int knownIdx = knownRebecNames.indexOf(n);
@@ -185,6 +239,9 @@ public class RebecInstance {
             if ("-".equals(u.getOperator())) return -toInt(operand);
         }
 
+        if (e instanceof CastExpression)
+            return evalExpr(((CastExpression) e).getExpression(), allRebecs, senderId);
+
         if (e instanceof DotPrimary) {
             // Evaluating a DotPrimary as an expression — treat as a send statement
             executeSend((DotPrimary) e, allRebecs, senderId);
@@ -204,9 +261,9 @@ public class RebecInstance {
                 ? Collections.emptyList()
                 : right.getParentSuffixPrimary().getArguments();
 
-        int[] params = new int[argExprs.size()];
+        Object[] params = new Object[argExprs.size()];
         for (int i = 0; i < argExprs.size(); i++)
-            params[i] = toInt(evalExpr(argExprs.get(i), allRebecs, senderId));
+            params[i] = evalExpr(argExprs.get(i), allRebecs, senderId);
 
         allRebecs[receiverId].enqueue(new Message(msgName, this.id, params));
     }
@@ -241,15 +298,43 @@ public class RebecInstance {
     private static int     toInt(Object v)     { return ((Number) v).intValue(); }
 
     private Object[] snapshotVars() {
-        return stateVarNames.stream().map(vars::get).toArray();
+        Object[] snap = new Object[stateVarNames.size()];
+        for (int i = 0; i < stateVarNames.size(); i++) {
+            Object v = vars.get(stateVarNames.get(i));
+            snap[i] = (v instanceof int[]) ? ((int[]) v).clone() : v;
+        }
+        return snap;
     }
 
     private void restoreVars(Object[] vals) {
-        for (int i = 0; i < stateVarNames.size(); i++)
-            vars.put(stateVarNames.get(i), vals[i]);
+        for (int i = 0; i < stateVarNames.size(); i++) {
+            Object v = vals[i];
+            vars.put(stateVarNames.get(i), (v instanceof int[]) ? ((int[]) v).clone() : v);
+        }
     }
 
     // -------------------------------------------------------------------------
+
+    /** Returns a human-readable description of this rebec's state from a given snapshot. */
+    public String describeSnapshot(RebecSnapshot s) {
+        StringBuilder sb = new StringBuilder(name).append(": vars={");
+        for (int i = 0; i < stateVarNames.size(); i++) {
+            if (i > 0) sb.append(", ");
+            Object v = s.vars[i];
+            sb.append(stateVarNames.get(i)).append("=")
+              .append((v instanceof int[]) ? Arrays.toString((int[]) v) : v);
+        }
+        sb.append("} queue=[");
+        boolean first = true;
+        for (Message m : s.queue) {
+            if (!first) sb.append(", ");
+            sb.append(m.name);
+            if (m.params.length > 0) sb.append(Arrays.toString(m.params));
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
 
     @Override
     public String toString() {

@@ -21,11 +21,11 @@ public final class RebecSnapshot {
     public boolean equals(Object o) {
         if (!(o instanceof RebecSnapshot)) return false;
         RebecSnapshot s = (RebecSnapshot) o;
-        return queue.equals(s.queue) && Arrays.equals(vars, s.vars);
+        return queue.equals(s.queue) && Arrays.deepEquals(vars, s.vars);
     }
 
     @Override
     public int hashCode() {
-        return 31 * queue.hashCode() + Arrays.hashCode(vars);
+        return 31 * queue.hashCode() + Arrays.deepHashCode(vars);
     }
 }

@@ -104,7 +104,11 @@ public class RebecTranslator {
                 knownIds[j] = idByName.get(boundName);
             }
             instances[i].knownRebecs = knownIds;
-            instances[i].enqueue(new Message("initial", i));
+            List<Expression> ctorArgs = def.getArguments();
+            Object[] initParams = new Object[ctorArgs.size()];
+            for (int j = 0; j < ctorArgs.size(); j++)
+                initParams[j] = evalConstExpr(ctorArgs.get(j));
+            instances[i].enqueue(new Message("initial", i, initParams));
         }
 
         return instances;
@@ -127,12 +131,31 @@ public class RebecTranslator {
     private static Map<String, Object> defaultVars(List<FieldDeclaration> statevars) {
         Map<String, Object> vars = new LinkedHashMap<>();
         for (FieldDeclaration fd : statevars) {
-            Object defaultVal = defaultForType(fd.getType().getTypeName());
+            Object defaultVal;
+            if (fd.getType() instanceof ArrayType) {
+                int size = ((ArrayType) fd.getType()).getDimensions().get(0);
+                defaultVal = new int[size];
+            } else {
+                defaultVal = defaultForType(fd.getType().getTypeName());
+            }
             for (VariableDeclarator vd : fd.getVariableDeclarators()) {
                 vars.put(vd.getVariableName(), defaultVal);
             }
         }
         return vars;
+    }
+
+    /** Evaluates a compile-time constant expression used as a constructor argument. */
+    private static Object evalConstExpr(Expression e) {
+        if (e instanceof CastExpression)
+            return evalConstExpr(((CastExpression) e).getExpression());
+        if (e instanceof Literal) {
+            String s = ((Literal) e).getLiteralValue();
+            if ("true".equals(s))  return Boolean.TRUE;
+            if ("false".equals(s)) return Boolean.FALSE;
+            try { return Integer.parseInt(s); } catch (NumberFormatException ignored) {}
+        }
+        throw new UnsupportedOperationException("Unsupported constructor arg: " + e.getClass().getSimpleName());
     }
 
     private static Object defaultForType(String typeName) {

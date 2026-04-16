@@ -1,0 +1,64 @@
+reactiveclass Customer(10) {
+	knownrebecs {
+		Agent a;
+	}
+	statevars {
+		byte id;
+		boolean sent;
+	}
+	Customer(byte myId) {
+		id = myId;
+		sent = false;
+		self.try();
+	}
+	msgsrv try() {
+		a.requestTicket();
+	}
+	msgsrv ticketIssued() {
+		sent = false;
+
+	}
+}
+
+reactiveclass Agent(10) {
+	knownrebecs {
+		TicketService ts;
+	}
+	statevars {
+		int shared;
+	}
+	Agent() {
+		shared = 0;
+	}
+	msgsrv requestTicket() {
+		shared = shared + 1;
+		ts.requestTicket((Customer)sender);
+	}
+	msgsrv ticketIssued(Customer customer) {
+		customer.ticketIssued();
+	}
+}
+
+reactiveclass TicketService(10) {
+	knownrebecs {
+		Agent a;
+	}
+	statevars {
+	}
+	TicketService() {
+	}
+	msgsrv requestTicket(Customer customer) {
+		a.ticketIssued(customer);
+	}
+}
+
+main {
+	Agent a(ts):();
+	TicketService ts(a):();	
+	Customer c1(a):(1);
+	Customer c2(a):(2);
+}
+
+
+
+

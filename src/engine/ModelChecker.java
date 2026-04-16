@@ -5,6 +5,7 @@ import por.SafetyAnalyzer;
 import rebec.RebecInstance;
 import rebec.StepResult;
 
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,6 +28,8 @@ public class ModelChecker {
     private final boolean         detectDeadlock;
     private final StateStorage    storage    = new StateStorage();
     private final List<String>    violations = new ArrayList<>();
+    private       PrintWriter     stateLog   = null;
+    private       int             stateCount = 0;
 
     public ModelChecker(RebecInstance[] instances, boolean usePOR, boolean detectDeadlock) {
         this.instances      = instances;
@@ -43,10 +46,13 @@ public class ModelChecker {
         dfs(initial);
         System.out.printf("States explored: %d%n", storage.visitedCount());
         if (violations.isEmpty()) System.out.println("No violations found.");
+        if (stateLog != null) stateLog.flush();
         return violations;
     }
 
     public int getStatesExplored() { return storage.visitedCount(); }
+
+    public void setStateLog(PrintWriter w) { this.stateLog = w; }
 
     // -------------------------------------------------------------------------
 
@@ -54,6 +60,12 @@ public class ModelChecker {
         if (storage.isVisited(current)) return;
 
         storage.add(current);
+        if (stateLog != null) {
+            stateLog.printf("--- State #%d ---%n", ++stateCount);
+            for (int i = 0; i < instances.length; i++)
+                stateLog.println("  " + instances[i].describeSnapshot(current.snapshots[i]));
+            stateLog.println();
+        }
         storage.pushStack(current);
         current.restore(instances);
 
