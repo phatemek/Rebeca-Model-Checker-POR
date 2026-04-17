@@ -36,7 +36,7 @@ public class SafetyAnalyzer {
         Map<Integer, Set<Integer>> senders = buildSendersMap(instances);
 
         for (RebecInstance r : instances) {
-            for (Map.Entry<String, MsgsrvDeclaration> entry : r.getMsgsrvs().entrySet()) {
+            for (Map.Entry<String, MethodDeclaration> entry : r.getMsgsrvs().entrySet()) {
                 String msgsrvName = entry.getKey();
 
                 // initial is always safe — exempt from analysis
@@ -62,7 +62,7 @@ public class SafetyAnalyzer {
     private static Map<Integer, Set<Integer>> buildSendersMap(RebecInstance[] instances) {
         Map<Integer, Set<Integer>> senders = new HashMap<>();
         for (RebecInstance r : instances) {
-            for (MsgsrvDeclaration msgsrv : r.getMsgsrvs().values()) {
+            for (MethodDeclaration msgsrv : r.getMsgsrvs().values()) {
                 for (String targetName : collectSendTargetNames(msgsrv.getBlock())) {
                     int targetId = resolveTarget(r, targetName);
                     if (targetId >= 0)
@@ -78,9 +78,10 @@ public class SafetyAnalyzer {
      * the given rebec is the exclusive sender.
      */
     private static boolean allSendsAreSafe(RebecInstance r,
-                                            MsgsrvDeclaration msgsrv,
+                                            MethodDeclaration msgsrv,
                                             Map<Integer, Set<Integer>> senders) {
         for (String targetName : collectSendTargetNames(msgsrv.getBlock())) {
+            if ("$dynamic".equals(targetName)) return false; // unresolvable target — conservatively unsafe
             int targetId = resolveTarget(r, targetName);
             if (targetId < 0) continue;
             Set<Integer> s = senders.getOrDefault(targetId, Collections.emptySet());
@@ -122,11 +123,16 @@ public class SafetyAnalyzer {
             if (cs.getElseStatement() != null)
                 collectFromStatement(cs.getElseStatement(), targets);
 
+        } else if (st instanceof WhileStatement) {
+            collectFromStatement(((WhileStatement) st).getStatement(), targets);
+
         } else if (st instanceof DotPrimary) {
             // send statement: left side is the receiver
             Expression left = ((DotPrimary) st).getLeft();
             if (left instanceof TermPrimary)
                 targets.add(((TermPrimary) left).getName());
+            else
+                targets.add("$dynamic"); // cast or computed target — conservatively unsafe
         }
         // BinaryExpression (assignments) — always safe, not collected
     }

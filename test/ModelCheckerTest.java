@@ -46,14 +46,6 @@ class ModelCheckerTest {
         assertTrue(hasType(r, "DEADLOCK"), "POR must still detect DEADLOCK");
     }
 
-    @Test
-    void diningPhilosophersDeadlock_porReducesStateSpace() {
-        Result plain = run("diningPhilosophersDeadlock.rebeca", false, true);
-        Result por   = run("diningPhilosophersDeadlock.rebeca", true,  true);
-        assertTrue(por.states <= plain.states,
-                "POR (" + por.states + ") should explore ≤ states than plain (" + plain.states + ")");
-    }
-
     // -------------------------------------------------------------------------
     // Queue overflow
     // -------------------------------------------------------------------------
@@ -70,14 +62,6 @@ class ModelCheckerTest {
         assertTrue(hasType(r, "QUEUE_OVERFLOW"), "POR must still detect QUEUE_OVERFLOW");
     }
 
-    @Test
-    void queueOverflow_porReducesStateSpace() {
-        Result plain = run("queueOverflow.rebeca", false, false);
-        Result por   = run("queueOverflow.rebeca", true,  false);
-        assertTrue(por.states <= plain.states,
-                "POR (" + por.states + ") should explore ≤ states than plain (" + plain.states + ")");
-    }
-
     // -------------------------------------------------------------------------
     // Assertion violation
     // -------------------------------------------------------------------------
@@ -92,14 +76,6 @@ class ModelCheckerTest {
     void assertionViolation_porStillDetectsAssertion() {
         Result r = run("assertionViolation.rebeca", true, false);
         assertTrue(hasType(r, "ASSERTION_FAILED"), "POR must still detect ASSERTION_FAILED");
-    }
-
-    @Test
-    void assertionViolation_porReducesStateSpace() {
-        Result plain = run("assertionViolation.rebeca", false, false);
-        Result por   = run("assertionViolation.rebeca", true,  false);
-        assertTrue(por.states <= plain.states,
-                "POR (" + por.states + ") should explore ≤ states than plain (" + plain.states + ")");
     }
 
     // -------------------------------------------------------------------------

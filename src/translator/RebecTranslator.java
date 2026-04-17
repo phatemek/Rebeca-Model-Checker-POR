@@ -37,7 +37,7 @@ public class RebecTranslator {
 
             Set<CompilerExtension> extensions = EnumSet.noneOf(CompilerExtension.class);
             Pair<RebecaModel, SymbolTable> out =
-                    compiler.compileRebecaFile(modelFile, extensions, CoreVersion.CORE_2_0);
+                    compiler.compileRebecaFile(modelFile, extensions, CoreVersion.CORE_2_3);
 
             if (out == null || !exceptions.exceptionsIsEmpty()) {
                 System.err.println("Parse errors in " + modelFile.getName() + ":");
@@ -69,17 +69,35 @@ public class RebecTranslator {
 
         // ---- Pass 1: create instances ----
         for (int i = 0; i < mainDefs.size(); i++) {
-            MainRebecDefinition    def = mainDefs.get(i);
+            MainRebecDefinition      def = mainDefs.get(i);
             ReactiveClassDeclaration rcd = classByName.get(def.getType().getTypeName());
 
-            List<String>         knownRebecNames = extractVarNames(rcd.getKnownRebecs());
-            List<String>         stateVarNames   = extractVarNames(rcd.getStatevars());
-            Map<String, Object>  initialVars     = defaultVars(rcd.getStatevars());
-
-            Map<String, MsgsrvDeclaration> msgsrvMap = new LinkedHashMap<>();
-            for (MsgsrvDeclaration m : rcd.getMsgsrvs()) {
-                msgsrvMap.put(m.getName(), m);
+            // Collect statevars and knownRebecs — parent first, then child
+            List<String>         knownRebecNames = new ArrayList<>();
+            List<String>         stateVarNames   = new ArrayList<>();
+            Map<String, Object>  initialVars     = new LinkedHashMap<>();
+            ReactiveClassDeclaration parent = parentOf(rcd, classByName);
+            if (parent != null) {
+                knownRebecNames.addAll(extractVarNames(parent.getKnownRebecs()));
+                stateVarNames.addAll(extractVarNames(parent.getStatevars()));
+                initialVars.putAll(defaultVars(parent.getStatevars()));
             }
+            knownRebecNames.addAll(extractVarNames(rcd.getKnownRebecs()));
+            stateVarNames.addAll(extractVarNames(rcd.getStatevars()));
+            initialVars.putAll(defaultVars(rcd.getStatevars()));
+
+            // Build msgsrv map — parent non-abstract msgsrvs first, child overrides
+            Map<String, MethodDeclaration> msgsrvMap = new LinkedHashMap<>();
+            if (parent != null) {
+                if (!parent.getConstructors().isEmpty())
+                    msgsrvMap.put("initial", parent.getConstructors().get(0));
+                for (MsgsrvDeclaration m : parent.getMsgsrvs())
+                    if (!m.isAbstract()) msgsrvMap.put(m.getName(), m);
+            }
+            if (!rcd.getConstructors().isEmpty())
+                msgsrvMap.put("initial", rcd.getConstructors().get(0));
+            for (MsgsrvDeclaration m : rcd.getMsgsrvs())
+                if (!m.isAbstract()) msgsrvMap.put(m.getName(), m);
 
             instances[i] = new RebecInstance(
                     i,
@@ -143,6 +161,13 @@ public class RebecTranslator {
             }
         }
         return vars;
+    }
+
+    /** Returns the parent ReactiveClassDeclaration if this class extends one, else null. */
+    private static ReactiveClassDeclaration parentOf(ReactiveClassDeclaration rcd,
+                                                      Map<String, ReactiveClassDeclaration> classByName) {
+        if (rcd.getExtends() == null) return null;
+        return classByName.get(rcd.getExtends().getTypeName());
     }
 
     /** Evaluates a compile-time constant expression used as a constructor argument. */

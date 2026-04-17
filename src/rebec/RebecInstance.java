@@ -24,12 +24,14 @@ public class RebecInstance {
     private final List<String>                   knownRebecNames; // matches knownRebecs[] index-for-index
     private final List<String>                   stateVarNames;   // for ordered snapshot / restore
     private final Map<String, Object>            vars;            // current state variable values
-    private final Map<String, MsgsrvDeclaration> msgsrvs;         // AST per message name
+    private final Map<String, MethodDeclaration> msgsrvs;          // AST per message name
 
-    private final int           maxQueueSize;
+    private final int            maxQueueSize;
     private       Deque<Message> queue;
     private       boolean        hasOverflowed;
-    private final Set<String>    safeMsgsrvs = new HashSet<>();
+    private final Set<String>    safeMsgsrvs   = new HashSet<>();
+    private       List<Integer>  choiceSchedule = Collections.emptyList();
+    private       int            choiceIndex    = 0;
 
     public RebecInstance(int id,
                          String name,
@@ -38,7 +40,7 @@ public class RebecInstance {
                          List<String> knownRebecNames,
                          List<String> stateVarNames,
                          Map<String, Object> initialVars,
-                         Map<String, MsgsrvDeclaration> msgsrvs) {
+                         Map<String, MethodDeclaration> msgsrvs) {
         this.id              = id;
         this.name            = name;
         this.className       = className;
@@ -74,7 +76,13 @@ public class RebecInstance {
     public boolean isCurrentActionSafe()             { String a = enabledAction(); return a != null && safeMsgsrvs.contains(a); }
 
     /** Exposes the msgsrv map for static analysis. */
-    public Map<String, MsgsrvDeclaration> getMsgsrvs() { return Collections.unmodifiableMap(msgsrvs); }
+    public Map<String, MethodDeclaration> getMsgsrvs() { return Collections.unmodifiableMap(msgsrvs); }
+
+    /** Sets the non-deterministic choice schedule for the next execute() call. */
+    public void setChoiceSchedule(List<Integer> schedule) {
+        this.choiceSchedule = schedule;
+        this.choiceIndex    = 0;
+    }
 
     /** Exposes the known-rebec name list (parallel to knownRebecs[]) for static analysis. */
     public List<String> getKnownRebecNames() { return Collections.unmodifiableList(knownRebecNames); }
@@ -91,7 +99,7 @@ public class RebecInstance {
     public StepResult execute(RebecInstance[] allRebecs) {
         if (!isEnabled()) return StepResult.DISABLED;
         Message msg = queue.pollFirst();
-        MsgsrvDeclaration msgsrv = msgsrvs.get(msg.name);
+        MethodDeclaration msgsrv = msgsrvs.get(msg.name);
         if (msgsrv == null) return StepResult.OK;   // unknown message — skip silently
         // Bind formal parameters to actual values passed with the message
         List<FormalParameterDeclaration> formals = msgsrv.getFormalParameters();
@@ -239,6 +247,13 @@ public class RebecInstance {
             if ("-".equals(u.getOperator())) return -toInt(operand);
         }
 
+        if (e instanceof NonDetExpression) {
+            List<Expression> choices = ((NonDetExpression) e).getChoices();
+            if (choiceIndex < choiceSchedule.size())
+                return evalExpr(choices.get(choiceSchedule.get(choiceIndex++)), allRebecs, senderId);
+            throw new NeedMoreChoicesException(choices.size());
+        }
+
         if (e instanceof CastExpression)
             return evalExpr(((CastExpression) e).getExpression(), allRebecs, senderId);
 
@@ -343,5 +358,11 @@ public class RebecInstance {
 
     private static class AssertionFailedException extends RuntimeException {
         AssertionFailedException() { super(null, null, true, false); }
+    }
+
+    /** Thrown when a NonDetExpression is reached but no choice has been scheduled for it. */
+    public static class NeedMoreChoicesException extends RuntimeException {
+        public final int numChoices;
+        NeedMoreChoicesException(int n) { super(null, null, true, false); this.numChoices = n; }
     }
 }
