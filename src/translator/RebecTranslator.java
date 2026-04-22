@@ -129,6 +129,14 @@ public class RebecTranslator {
             instances[i].enqueue(new Message("initial", i, initParams));
         }
 
+        // ---- Pass 3: execute all constructors atomically before model checking ----
+        // Runs each actor's constructor body so that state variables are initialized
+        // and any self-sends from constructors are queued. The DFS then starts from
+        // the post-constructor state, matching Afra's semantics.
+        for (int i = 0; i < instances.length; i++) {
+            instances[i].execute(instances);
+        }
+
         return instances;
     }
 

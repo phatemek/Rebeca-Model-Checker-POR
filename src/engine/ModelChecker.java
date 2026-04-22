@@ -14,7 +14,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * DFS-based model checker.
@@ -39,6 +41,7 @@ public class ModelChecker {
     private final boolean         detectDeadlock;
     private final StateStorage    storage      = new StateStorage();
     private final List<String>    violations   = new ArrayList<>();
+    private final Set<String>     seenViolations = new LinkedHashSet<>();
     private       PrintWriter     stateLog     = null;
     private       File            tempFile     = null;
     private       PrintWriter     statePrinter = null;
@@ -89,7 +92,6 @@ public class ModelChecker {
     // -------------------------------------------------------------------------
 
     private void dfs(GlobalSnapshot current) {
-        if (!violations.isEmpty()) return;
         if (storage.isVisited(current)) return;
 
         storage.add(current);
@@ -152,11 +154,9 @@ public class ModelChecker {
                 return;
             }
             checkOverflows(r);
-            if (!violations.isEmpty()) return;
             dfs(new GlobalSnapshot(instances));
         } catch (NeedMoreChoicesException e) {
             for (int i = 0; i < e.numChoices; i++) {
-                if (!violations.isEmpty()) return;
                 List<Integer> extended = new ArrayList<>(choices);
                 extended.add(i);
                 executeAndDfs(r, current, action, extended);
@@ -210,6 +210,7 @@ public class ModelChecker {
     }
 
     private void report(String msg) {
+        if (!seenViolations.add(msg)) return;  // deduplicate: already reported this violation
         violations.add(msg);
         System.out.println("Violation: " + msg);
         if (statePrinter != null) {

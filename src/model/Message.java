@@ -30,13 +30,12 @@ public final class Message {
         if (!(o instanceof Message)) return false;
         Message m = (Message) o;
         return name.equals(m.name)
-                && senderId == m.senderId
                 && Arrays.equals(params, m.params);
     }
 
     @Override
     public int hashCode() {
-        return 31 * (31 * name.hashCode() + senderId) + Arrays.hashCode(params);
+        return 31 * name.hashCode() + Arrays.hashCode(params);
     }
 
     @Override
